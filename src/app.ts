@@ -4,12 +4,7 @@ import passport from 'passport';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { errorHandler } from './middleware/errorHandler';
-
-// Routes
-import authRoutes from './routes/auth.routes';
-import userRoutes from './routes/user.routes';
-import planRoutes from './routes/plan.routes';
-import chatRoutes from './routes/chat.routes';
+import routes from './routes';
 
 // Load environment variables
 dotenv.config();
@@ -29,7 +24,13 @@ mongoose
   });
 
 // Middleware
-app.use(express.json());
+app.use((req, res, next) => {
+  if (req.path.includes('/api/user/photos') || req.path.includes('/api/user/avatar')) {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: process.env.FRONTEND_URL,
@@ -41,12 +42,11 @@ app.use(passport.initialize());
 require('./config/passport');
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/plans', planRoutes);
-app.use('/api/chats', chatRoutes);
+app.use('/api', routes);
 
-// Error handling
-app.use(errorHandler);
+// Error handling middleware (debe ir después de las rutas)
+app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  errorHandler(err, req, res, next);
+});
 
 export default app;

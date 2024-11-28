@@ -1,20 +1,55 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import { AuthError } from '../utils/errors';
 
-export const register = async (req: Request, res: Response) => {
+// Extender Request para incluir el usuario tipado
+interface AuthRequest extends Request {
+  user?: IUser;
+}
+
+const generateToken = (userId: string): string => {
+  return jwt.sign(
+    { userId },
+    process.env.JWT_SECRET!,
+    { expiresIn: process.env.JWT_EXPIRATION || '24h' }
+  );
+};
+
+const formatUserResponse = (user: IUser) => {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    bio: user.bio,
+    interests: user.interests,
+    availability: user.availability,
+    settings: user.settings,
+    photos: user.photos || [],
+    friends: user.friends,
+    plansCreated: user.plansCreated,
+    plansJoined: user.plansJoined,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  };
+};
+
+export const register = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { email, password, name } = req.body;
 
     // Verificar si el usuario ya existe
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email }).exec();
     if (existingUser) {
       throw new AuthError('El email ya está registrado');
     }
 
     // Crear nuevo usuario
-    const user = new User({
+    const user = await User.create({
       email,
       password,
       name,
@@ -32,39 +67,29 @@ export const register = async (req: Request, res: Response) => {
       },
     });
 
-    await user.save();
-
     // Generar token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRATION }
-    );
+    const token = generateToken(user.id);
 
+    // Enviar respuesta
     res.status(201).json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-      },
+      user: formatUserResponse(user),
     });
   } catch (error) {
-    if (error instanceof AuthError) {
-      res.status(400).json({ message: error.message });
-    } else {
-      console.error('Error en registro:', error);
-      res.status(500).json({ message: 'Error en el servidor' });
-    }
+    next(error);
   }
 };
 
-export const login = async (req: Request, res: Response) => {
+export const login = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { email, password } = req.body;
 
     // Buscar usuario
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).exec();
     if (!user) {
       throw new AuthError('Credenciales inválidas');
     }
@@ -76,106 +101,74 @@ export const login = async (req: Request, res: Response) => {
     }
 
     // Generar token
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRATION }
-    );
+    const token = generateToken(user.id);
 
+    // Enviar respuesta
     res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        settings: user.settings,
-      },
+      user: formatUserResponse(user),
     });
   } catch (error) {
-    if (error instanceof AuthError) {
-      res.status(401).json({ message: error.message });
-    } else {
-      console.error('Error en login:', error);
-      res.status(500).json({ message: 'Error en el servidor' });
-    }
+    next(error);
   }
 };
 
-export const googleAuth = async (req: Request, res: Response) => {
+export const googleAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { user } = req;
-    if (!user) {
+    if (!req.user) {
       throw new AuthError('No se pudo autenticar con Google');
     }
 
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRATION }
-    );
+    const token = generateToken(req.user.id);
 
     res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-      },
+      user: formatUserResponse(req.user),
     });
   } catch (error) {
-    console.error('Error en autenticación Google:', error);
-    res.status(500).json({ message: 'Error en la autenticación con Google' });
+    next(error);
   }
 };
 
-export const facebookAuth = async (req: Request, res: Response) => {
+export const facebookAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { user } = req;
-    if (!user) {
+    if (!req.user) {
       throw new AuthError('No se pudo autenticar con Facebook');
     }
 
-    const token = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET!,
-      { expiresIn: process.env.JWT_EXPIRATION }
-    );
+    const token = generateToken(req.user.id);
 
     res.json({
       token,
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-      },
+      user: formatUserResponse(req.user),
     });
   } catch (error) {
-    console.error('Error en autenticación Facebook:', error);
-    res.status(500).json({ message: 'Error en la autenticación con Facebook' });
+    next(error);
   }
 };
 
-export const me = async (req: Request, res: Response) => {
+export const getProfile = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { user } = req;
-    if (!user) {
-      throw new AuthError('Usuario no autenticado');
+    if (!req.user) {
+      throw new AuthError('No autorizado');
     }
 
     res.json({
-      user: {
-        id: user._id,
-        email: user.email,
-        name: user.name,
-        avatar: user.avatar,
-        settings: user.settings,
-      },
+      user: formatUserResponse(req.user),
     });
   } catch (error) {
-    console.error('Error al obtener perfil:', error);
-    res.status(401).json({ message: 'No autorizado' });
+    next(error);
   }
 };

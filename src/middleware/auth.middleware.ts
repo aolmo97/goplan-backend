@@ -1,78 +1,90 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
 import { AuthError } from '../utils/errors';
+import User, { IUser } from '../models/User';
 
-declare global {
-  namespace Express {
-    interface Request {
-      user?: any;
-      token?: string;
-    }
-  }
+// Extender la interfaz Request para incluir el usuario
+export interface AuthRequest extends Request {
+  user?: IUser;
 }
 
-export const auth = async (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      throw new AuthError('No se proporcionó token de autenticación');
+    }
+
+    const token = authHeader.split(' ')[1];
     if (!token) {
-      throw new AuthError('Token no proporcionado');
+      throw new AuthError('Formato de token inválido');
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    const user = await User.findById(decoded.userId);
-
+    const user = await User.findById(decoded.userId)
+      .select('-password')
+      .exec();
+    
     if (!user) {
       throw new AuthError('Usuario no encontrado');
     }
 
-    req.token = token;
     req.user = user;
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {
-      res.status(401).json({ message: 'Token inválido' });
+      next(new AuthError('Token inválido'));
     } else {
-      console.error('Error de autenticación:', error);
-      res.status(401).json({ message: 'No autorizado' });
+      next(error);
     }
   }
 };
 
-export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
+export const optionalAuth = async (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    if (token) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-      const user = await User.findById(decoded.userId);
-      if (user) {
-        req.token = token;
-        req.user = user;
-      }
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
+    const user = await User.findById(decoded.userId)
+      .select('-password')
+      .exec();
+    
+    if (user) {
+      req.user = user;
     }
     next();
   } catch (error) {
-    // Si hay error en la autenticación, simplemente continuamos sin usuario
+    // En auth opcional, si hay algún error simplemente continuamos sin usuario
     next();
   }
 };
 
 export const checkRole = (roles: string[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      if (!req.user) {
-        throw new AuthError('No autorizado');
-      }
-
-      const userRole = req.user.role;
-      if (!roles.includes(userRole)) {
-        throw new AuthError('No tienes permisos suficientes');
-      }
-
-      next();
-    } catch (error) {
-      console.error('Error de autorización:', error);
-      res.status(403).json({ message: error instanceof AuthError ? error.message : 'No autorizado' });
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return next(new AuthError('No autorizado'));
     }
+
+    if (!roles.includes(req.user.role)) {
+      return next(new AuthError('No tienes permisos suficientes'));
+    }
+
+    next();
   };
 };

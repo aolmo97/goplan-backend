@@ -7,8 +7,8 @@ import chatRoutes from './chat.routes';
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/plans', planRoutes);
-router.use('/chats', chatRoutes);
+router.use('/user', userRoutes);
+//router.use('/plans', planRoutes);
+//router.use('/chats', chatRoutes);
 
 export default router;

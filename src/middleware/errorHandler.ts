@@ -10,31 +10,35 @@ export const errorHandler = (
   console.error('Error:', err);
 
   if (err instanceof AuthError) {
-    return res.status(401).json({
+    res.status(401).json({
       error: 'AuthError',
       message: err.message
     });
+    return;
   }
 
   if (err instanceof UserError) {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'UserError',
       message: err.message
     });
+    return;
   }
 
   if (err instanceof PlanError) {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'PlanError',
       message: err.message
     });
+    return;
   }
 
   if (err instanceof ChatError) {
-    return res.status(400).json({
+    res.status(400).json({
       error: 'ChatError',
       message: err.message
     });
+    return;
   }
 
   // Error por defecto

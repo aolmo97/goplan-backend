@@ -24,18 +24,40 @@ mongoose
   });
 
 // Middleware
-app.use((req, res, next) => {
-  if (req.path.includes('/api/user/photos') || req.path.includes('/api/user/avatar')) {
-    next();
-  } else {
-    express.json()(req, res, next);
-  }
-});
-app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true
+  origin: '*',  // Permitir todas las origenes en desarrollo
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
+
+// Middleware para manejar preflight requests
+app.options('*', cors());
+
+// Configurar middleware para rutas específicas
+app.use((req, res, next) => {
+  // Agregar headers adicionales para Expo
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // No procesar el body para rutas de subida de archivos
+  if (req.path.includes('/api/user/photos') || req.path.includes('/api/user/avatar')) {
+    // Log para depuración
+    console.log('Headers de la solicitud:', {
+      contentType: req.headers['content-type'],
+      contentLength: req.headers['content-length']
+    });
+    return next();
+  }
+  
+  // Para otras rutas, usar el parser JSON
+  express.json()(req, res, next);
+});
+
+// Configurar el parser de URL-encoded después del middleware personalizado
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
 app.use(passport.initialize());
 
 // Configure passport strategies

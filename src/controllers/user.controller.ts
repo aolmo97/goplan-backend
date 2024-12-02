@@ -240,14 +240,42 @@ export const uploadAvatar = async (req: Request, res: Response): Promise<void> =
 
 export const uploadPhotos = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    console.log('Request files:', req.files);
-    console.log('Request body:', req.body);
-    console.log('Request headers:', req.headers);
+    console.log('=== Inicio de uploadPhotos ===');
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Content-Length:', req.headers['content-length']);
+    console.log('Files:', req.files ? `Presente (${Array.isArray(req.files) ? req.files.length : Object.keys(req.files).length} archivos)` : 'No presente');
 
-    const files = req.files as Express.Multer.File[];
-    if (!files || files.length === 0) {
-      console.log('No se detectaron archivos en la solicitud');
-      res.status(400).json({ message: 'No se han proporcionado imágenes' });
+    if (!req.files) {
+      console.log('No hay archivos en la request');
+      res.status(400).json({ 
+        message: 'No se han proporcionado imágenes',
+        debug: { 
+          hasFiles: false,
+          contentType: req.headers['content-type'],
+          contentLength: req.headers['content-length']
+        }
+      });
+      return;
+    }
+
+    // Asegurarnos de que req.files es un array de Express.Multer.File
+    const files = Array.isArray(req.files) ? req.files : Object.values(req.files).flat();
+    console.log(`Procesando ${files.length} archivos:`, files.map(f => ({
+      fieldname: f.fieldname,
+      originalname: f.originalname,
+      size: f.size,
+      mimetype: f.mimetype
+    })));
+
+    if (files.length === 0) {
+      res.status(400).json({ 
+        message: 'No se encontraron archivos para procesar',
+        debug: { 
+          filesLength: files.length,
+          contentType: req.headers['content-type']
+        }
+      });
       return;
     }
 
@@ -258,29 +286,53 @@ export const uploadPhotos = async (req: AuthRequest, res: Response): Promise<voi
     }
 
     // Subir las imágenes a Azure
-    console.log('Iniciando subida a Azure de', files.length, 'archivos');
-    const photoUrls = await uploadMultipleToAzure(files);
-    console.log('URLs de fotos obtenidas:', photoUrls);
+    console.log('Iniciando subida a Azure');
+    const photoUrls = await uploadMultipleToAzure(files as Express.Multer.File[]);
+    console.log('URLs obtenidas:', photoUrls);
 
     // Actualizar el usuario con las nuevas fotos
     const user = await User.findById(userId);
     if (!user) {
+      console.error('Usuario no encontrado después de subir fotos:', userId);
       res.status(404).json({ message: 'Usuario no encontrado' });
       return;
     }
 
     // Agregar las nuevas fotos al array existente
+    const previousPhotosCount = user.photos?.length || 0;
     user.photos = [...(user.photos || []), ...photoUrls];
     await user.save();
-    console.log('Usuario actualizado con nuevas fotos');
+    console.log(`Usuario actualizado con éxito. Fotos anteriores: ${previousPhotosCount}, Nuevas fotos: ${photoUrls.length}, Total: ${user.photos.length}`);
 
     res.status(200).json({
       message: 'Fotos subidas correctamente',
+      photoUrls,
+      totalPhotos: user.photos.length,
       user
     });
   } catch (error) {
-    console.error('Error al subir fotos:', error);
-    res.status(500).json({ message: 'Error al subir las fotos', error: (error as Error).message });
+    console.error('Error en uploadPhotos:', error);
+    // Mejorar el mensaje de error para el cliente
+    let errorMessage = 'Error al subir las fotos';
+    let statusCode = 500;
+
+    if (error instanceof Error) {
+      if (error.message.includes('Azure')) {
+        errorMessage = 'Error al subir las fotos al servidor';
+      } else if (error.message.includes('size')) {
+        errorMessage = 'El tamaño de las fotos excede el límite permitido';
+        statusCode = 413;
+      }
+    }
+
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+      debug: { 
+        errorType: error?.constructor?.name,
+        timestamp: new Date().toISOString()
+      }
+    });
   }
 };
 

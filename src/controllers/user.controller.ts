@@ -10,7 +10,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
   try {
     const user = req.user as IUser;
     const updates = req.body;
-
+    console.log('Actualizando perfil:', updates);
     // Campos que no se pueden actualizar directamente
     const restrictedFields = ['password', 'email', 'googleId', 'facebookId'];
     restrictedFields.forEach(field => delete updates[field]);
@@ -20,7 +20,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
       { $set: updates },
       { new: true, runValidators: true }
     );
-
+    console.log('Perfil actualizado:', updatedUser);
     if (!updatedUser) {
       res.status(404).json({ message: 'Usuario no encontrado' });
       return;
@@ -338,13 +338,21 @@ export const uploadPhotos = async (req: AuthRequest, res: Response): Promise<voi
 
 export const deletePhoto = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { photoUrl } = req.body;
-    const userId = req.user?.id;
+    
+    const userId = req.user?._id;
+    const { photoId } = req.params;  
 
     if (!userId) {
       res.status(401).json({ message: 'Usuario no autenticado' });
       return;
     }
+
+    if (!photoId) {
+      res.status(400).json({ message: 'ID de la foto no proporcionado' });
+      return;
+    }
+
+    console.log('Intentando eliminar foto con ID:', photoId);
 
     const user = await User.findById(userId);
     if (!user) {
@@ -352,19 +360,41 @@ export const deletePhoto = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // Eliminar la foto de Azure
-    await deleteFromAzure(photoUrl);
+    // Encontrar la URL de la foto en el array del usuario
+    const photoUrl = user.photos[parseInt(photoId)];
+    console.log('URL de la foto a eliminar:', photoUrl);
+    
+    if (!photoUrl) {
+      res.status(404).json({ message: 'Foto no encontrada en el perfil del usuario' });
+      return;
+    }
 
-    // Eliminar la URL de la foto del array de fotos del usuario
-    user.photos = user.photos.filter(url => url !== photoUrl);
-    await user.save();
+    try {
+      // Eliminar la foto de Azure
+      await deleteFromAzure(photoUrl);
+      
+      // Eliminar la foto del array
+      user.photos.splice(parseInt(photoId), 1);
+      await user.save();
 
-    res.status(200).json({
-      message: 'Foto eliminada correctamente',
-      user
-    });
-  } catch (error) {
+      console.log('Foto eliminada correctamente del perfil del usuario');
+
+      res.status(200).json({
+        message: 'Foto eliminada correctamente',
+        user
+      });
+    } catch (error: any) {
+      console.error('Error al eliminar la foto de Azure:', error);
+      res.status(500).json({ 
+        message: 'Error al eliminar la foto de Azure',
+        error: error?.message || 'Error desconocido'
+      });
+    }
+  } catch (error: any) {
     console.error('Error al eliminar foto:', error);
-    res.status(500).json({ message: 'Error al eliminar la foto', error: (error as Error).message });
+    res.status(500).json({ 
+      message: 'Error al eliminar la foto',
+      error: error?.message || 'Error desconocido'
+    });
   }
 };

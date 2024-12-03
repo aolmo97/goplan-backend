@@ -195,9 +195,9 @@ export const uploadToAzure = async (file: Express.Multer.File): Promise<string> 
 
 export const uploadMultipleToAzure = async (files: Express.Multer.File[]): Promise<string[]> => {
   try {
-    // Asegurar que el cliente está inicializado antes de procesar cualquier archivo
+    // Asegurarse de que Azure Storage esté inicializado antes de procesar cualquier archivo
     if (!containerClient) {
-      console.log('Inicializando cliente de Azure...');
+      console.log('Inicializando Azure Storage...');
       await initializeAzureStorage();
       if (!containerClient) {
         throw new Error('No se pudo inicializar el cliente de Azure Storage');
@@ -245,16 +245,29 @@ export const uploadMultipleToAzure = async (files: Express.Multer.File[]): Promi
 };
 
 export const deleteFromAzure = async (url: string): Promise<void> => {
-  if (!containerClient) {
-    throw new Error('Azure Blob Storage no está configurado correctamente');
-  }
-
   try {
-    const blobName = url.split('/').pop();
-    if (!blobName) throw new Error('URL de blob inválida');
+    // Asegurarse de que Azure Storage esté inicializado
+    if (!containerClient) {
+      console.log('Inicializando Azure Storage...');
+      containerClient = await initializeAzureStorage();
+    }
+
+    if (!url) {
+      throw new Error('URL no proporcionada');
+    }
+
+    // Extraer el nombre del blob de la URL
+    const urlParts = url.split('/');
+    const blobName = urlParts[urlParts.length - 1];
     
+    if (!blobName) {
+      throw new Error('No se pudo extraer el nombre del blob de la URL');
+    }
+    
+    console.log('Intentando eliminar blob:', blobName);
     const blockBlobClient = containerClient.getBlockBlobClient(blobName);
     await blockBlobClient.delete();
+    console.log('Blob eliminado exitosamente:', blobName);
   } catch (error) {
     console.error('Error al eliminar archivo de Azure:', error);
     throw error;

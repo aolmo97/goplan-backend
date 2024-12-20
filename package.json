@@ -1,6 +1,6 @@
 {
   "name": "goplan-backend",
-  "version": "1.0.0",
+  "version": "1.0.5",
   "description": "Backend para la aplicación GoPlan",
   "main": "dist/server.js",
   "scripts": {

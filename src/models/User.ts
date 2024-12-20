@@ -15,6 +15,7 @@ export interface IUserSettings {
 }
 
 export interface IUser extends Document {
+  _id: mongoose.Types.ObjectId;
   id: string;
   email: string;
   password?: string;

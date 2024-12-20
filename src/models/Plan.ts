@@ -102,17 +102,26 @@ const planSchema = new Schema<IPlan>(
       enum: ['active', 'cancelled', 'completed'],
       default: 'active',
     },
-    media: [{
-      type: {
-        type: String,
-        enum: ['image', 'video'],
-        required: true,
-      },
-      url: {
-        type: String,
-        required: true,
-      },
-    }],
+    media: {
+      type: [{
+        type: {
+          type: String,
+          enum: ['image', 'video'],
+          required: true
+        },
+        url: {
+          type: String,
+          required: true
+        }
+      }],
+      required: true,
+      validate: {
+        validator: function(media: any[]) {
+          return media.length >= 1;
+        },
+        message: 'Al menos una imagen es requerida'
+      }
+    },
     chat: {
       type: Schema.Types.ObjectId,
       ref: 'Chat',

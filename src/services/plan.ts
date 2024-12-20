@@ -1,5 +1,3 @@
-import StorageService from './storage';
-import { API_CONFIG } from '../config';
 
 interface PlanData {
   title: string;
@@ -19,7 +17,7 @@ class PlanService {
   private readonly baseUrl: string;
 
   private constructor() {
-    this.baseUrl = `${API_CONFIG.BASE_URL}/plans`;
+    this.baseUrl = `${process.env.API_URL}/plans`;
   }
 
   public static getInstance(): PlanService {
@@ -40,7 +38,7 @@ class PlanService {
       try {
         console.log(`Intento ${attempt} de ${maxRetries}...`);
         
-        const response = await fetch(`${API_CONFIG.BASE_URL}/plans/photos`, {
+        const response = await fetch(`${process.env.API_URL}/plans/photos`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -70,7 +68,7 @@ class PlanService {
 
   async createPlan(planData: PlanData): Promise<any> {
     try {
-      const token = await StorageService.getAuthToken();
+      const token="";
       if (!token) {
         throw new Error('No hay sesión activa');
       }
@@ -127,7 +125,7 @@ class PlanService {
 
   async getPlans(): Promise<any[]> {
     try {
-      const token = await StorageService.getAuthToken();
+      const token = "";
       if (!token) {
         throw new Error('No hay sesión activa');
       }
@@ -152,7 +150,7 @@ class PlanService {
 
   async getPlan(planId: string): Promise<any> {
     try {
-      const token = await StorageService.getAuthToken();
+      const token = "";
       if (!token) {
         throw new Error('No hay sesión activa');
       }

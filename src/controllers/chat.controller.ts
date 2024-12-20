@@ -17,7 +17,7 @@ export const getChat = async (req: Request, res: Response) => {
     }
 
     // Verificar si el usuario es participante
-    if (!chat.participants.some(p => p._id.equals(user._id))) {
+    if (!chat.participants.some(p => p._id.equals(user?._id))) {
       throw new ChatError('No tienes acceso a este chat');
     }
 
@@ -40,8 +40,12 @@ export const sendMessage = async (req: Request, res: Response) => {
     }
 
     // Verificar si el usuario es participante
-    if (!chat.participants.some(p => p.equals(user._id))) {
+    if (!chat.participants.some(p => p.equals(user?._id))) {
       throw new ChatError('No tienes acceso a este chat');
+    }
+
+    if (!user?._id) {
+      throw new ChatError('Usuario no autenticado');
     }
 
     const message = {
@@ -49,6 +53,7 @@ export const sendMessage = async (req: Request, res: Response) => {
       content,
       type,
       readBy: [user._id],
+      createdAt: new Date()
     };
 
     chat.messages.push(message);
@@ -76,15 +81,15 @@ export const markMessagesAsRead = async (req: Request, res: Response) => {
     }
 
     // Verificar si el usuario es participante
-    if (!chat.participants.some(p => p.equals(user._id))) {
+    if (!chat.participants.some(p => p.equals(user?._id))) {
       throw new ChatError('No tienes acceso a este chat');
     }
 
     // Marcar como leídos los mensajes que no han sido leídos por el usuario
     const updates = chat.messages.map(message => {
-      if (!message.readBy.includes(user._id)) {
+      if (user?._id && !message.readBy.includes(user._id)) {
         message.readBy.push(user._id);
-      }
+      } 
       return message;
     });
 
@@ -109,7 +114,7 @@ export const getUnreadCount = async (req: Request, res: Response) => {
     }
 
     const unreadCount = chat.messages.filter(
-      message => !message.readBy.includes(user._id)
+      message => user?._id && !message.readBy.includes(user._id)
     ).length;
 
     res.json({ unreadCount });
